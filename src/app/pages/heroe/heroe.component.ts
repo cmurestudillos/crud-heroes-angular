@@ -8,55 +8,94 @@ import Swal from 'sweetalert2';
 
 @Component({
   selector: 'app-heroe',
-  templateUrl: './heroe.component.html'
+  templateUrl: './heroe.component.html',
 })
 export class HeroeComponent implements OnInit {
   heroe = new HeroeModel();
+  esNuevo = true;
+  _idHeroe: string | null = null;
 
-  constructor(private heroesService: HeroesService, private _route: ActivatedRoute, private _router: Router) { }
+  constructor(
+    private heroesService: HeroesService,
+    private _route: ActivatedRoute,
+    private _router: Router
+  ) {}
 
   ngOnInit() {
     const id = this._route.snapshot.paramMap.get('id');
-    if(id !== 'nuevo'){
-      this.heroesService.getHeroeById(id!)
-          .subscribe((resp: any) => {
-            this.heroe = resp;
-            this.heroe.id = id!;
-      });
-    }
+    this._idHeroe = id;
 
+    if (id !== 'nuevo') {
+      this.esNuevo = false;
+      this.cargarHeroe(id!);
+    }
   }
 
-  guardar(form: NgForm){
-    let peticion: Observable<any>;
-    if(form.invalid){
-      console.log('Formulario no valido.')
+  cargarHeroe(id: string) {
+    this.heroesService.getHeroeById(id).subscribe({
+      next: (resp: HeroeModel) => {
+        this.heroe = resp;
+      },
+      error: error => {
+        console.error('Error al cargar héroe:', error);
+        Swal.fire({
+          title: 'Error',
+          text: 'No se pudo cargar el héroe',
+          icon: 'error',
+        }).then(() => {
+          this._router.navigate(['/heroes']);
+        });
+      },
+    });
+  }
+
+  guardar(form: NgForm) {
+    if (form.invalid) {
+      console.log('Formulario no válido.');
+      // Marcar todos los campos como touched para mostrar errores
+      Object.keys(form.controls).forEach(key => {
+        form.controls[key].markAsTouched();
+      });
       return;
     }
 
     Swal.fire({
       title: 'Espere',
-      text: 'Guardando informacion',
+      text: 'Guardando información',
       icon: 'info',
-      allowOutsideClick: false
+      allowOutsideClick: false,
     });
     Swal.showLoading();
 
-    if (this.heroe.id){
+    let peticion: Observable<any>;
+
+    if (this.heroe.id && !this.esNuevo) {
+      // Actualizar héroe existente
       peticion = this.heroesService.actualizarHeroe(this.heroe);
-    }else{
+    } else {
+      // Crear nuevo héroe
       peticion = this.heroesService.crearHeroe(this.heroe);
     }
 
-    peticion.subscribe(resp => {
-      Swal.fire({
-        title: this.heroe.nombre,
-        text: 'Se actualizo correctamente',
-        icon: 'success'
-      });
-      this._router.navigate(['/heroes']);
+    peticion.subscribe({
+      next: resp => {
+        Swal.fire({
+          title: this.heroe.nombre,
+          text: this.esNuevo ? 'Se creó correctamente' : 'Se actualizó correctamente',
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false,
+        });
+        this._router.navigate(['/heroes']);
+      },
+      error: error => {
+        console.error('Error al guardar héroe:', error);
+        Swal.fire({
+          title: 'Error',
+          text: this.esNuevo ? 'No se pudo crear el héroe' : 'No se pudo actualizar el héroe',
+          icon: 'error',
+        });
+      },
     });
-
   }
-
 }

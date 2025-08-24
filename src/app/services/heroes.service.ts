@@ -3,62 +3,67 @@ import { HttpClient } from '@angular/common/http';
 import { HeroeModel } from '../models/heroe.model';
 import { map, delay } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
+import { Observable } from 'rxjs';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class HeroesService {
-  private url = environment.apiUrl;
+  private url = 'https://crud-heroes-service.vercel.app/api';
 
-  constructor(private http: HttpClient) { }
+  constructor(private http: HttpClient) {}
 
-  crearHeroe(heroe:HeroeModel){
-    return this.http.post(`${this.url}/heroes.json`, heroe)
-               .pipe(
-                 map( (resp: any) => {
-                   heroe.id = resp.name;
-                   return heroe;
-                 })
-               );
+  crearHeroe(heroe: HeroeModel): Observable<HeroeModel> {
+    return this.http.post<any>(`${this.url}/heroes`, heroe).pipe(
+      map((resp: any) => {
+        // El backend devuelve el héroe creado con _id
+        const nuevoHeroe = { ...resp };
+        nuevoHeroe.id = resp._id; // Convertimos _id a id para mantener consistencia
+        return nuevoHeroe;
+      })
+    );
   }
 
-  actualizarHeroe(heroe:HeroeModel){
-    const heroeTemp = {...heroe}
-    // if (heroeTemp.hasOwnProperty('id')) {
-    //   delete heroeTemp.id;
-    // }
-    return this.http.put(`${this.url}/heroes/${heroe.id}.json`, heroeTemp);
+  actualizarHeroe(heroe: HeroeModel): Observable<any> {
+    // Usamos _id para la actualización pero enviamos el objeto sin _id
+    const heroeTemp = { ...heroe };
+    delete heroeTemp.id; // Eliminamos id del objeto a enviar
+
+    return this.http.put(`${this.url}/heroes/${heroe.id}`, heroeTemp);
   }
 
-  borrarHeroe(id:string){
-    return this.http.delete(`${this.url}/heroes/${id}.json`)
+  borrarHeroe(id: string): Observable<any> {
+    return this.http.delete(`${this.url}/heroes/${id}`);
   }
 
-  getHeroeById(id:string){
-    return this.http.get(`${this.url}/heroes/${id}.json`)
+  getHeroeById(id: string): Observable<HeroeModel> {
+    return this.http.get<any>(`${this.url}/heroes/${id}`).pipe(
+      map((resp: any) => {
+        // Convertimos _id a id
+        const heroe = { ...resp };
+        heroe.id = resp._id;
+        return heroe;
+      })
+    );
   }
 
-  getHeroes(){
-    return this.http.get(`${this.url}/heroes.json`)
-               .pipe(
-                 map( resp => this.crearArray(resp)),
-                 delay(500)
-               );
+  getHeroes(): Observable<HeroeModel[]> {
+    return this.http.get<any>(`${this.url}/heroes`).pipe(
+      map((resp: any) => {
+        // El backend devuelve { "heroes": [...] }
+        if (resp && resp.heroes) {
+          return resp.heroes.map((heroe: any) => {
+            // Convertimos _id a id para mantener consistencia en el frontend
+            const heroeModificado = { ...heroe };
+            heroeModificado.id = heroe._id;
+            delete heroeModificado._id;
+            delete heroeModificado.__v; // Eliminamos el campo de versión de Mongoose
+            return heroeModificado;
+          });
+        }
+        return [];
+      }),
+      delay(500)
+    );
   }
-
-  private crearArray( heroesObj: any ){
-    const heroes: HeroeModel[]=[];
-    if(heroesObj === null){
-      return [];
-    }
-
-    Object.keys(heroesObj).forEach( key => {
-      const heroe: HeroeModel = heroesObj[key];
-      heroe.id = key;
-      heroes.push(heroe);
-    });
-
-    return heroes;
-  }
-
 }
